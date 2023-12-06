@@ -288,6 +288,7 @@ public class ClientHandler implements Runnable {
 
     private void handleStore(String fileName) {
         File file = new File(server.fileDirectory + File.separator + fileName);
+        boolean wasCreated = false;
 
         synchronized (fileLock) {
             if (file.exists()) {
@@ -300,7 +301,11 @@ public class ClientHandler implements Runnable {
                 int bytesReceived;
                 System.out.println("Starting to receive the file " + fileName);
                 while ((bytesReceived = dataInputStream.read(buffer)) != -1) {
+                    wasCreated = true;
                     fos.write(buffer, 0, bytesReceived);
+                }
+                if (!wasCreated) {
+                    throw new IOException("File was not created");
                 }
                 System.out.println("File has been received and saved successfully as " + fileName);
                 dataOutputStream.writeUTF("File " + fileName + " successfully uploaded.");

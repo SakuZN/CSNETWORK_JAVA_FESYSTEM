@@ -21,8 +21,8 @@ public class Client {
     private DataOutputStream dos;
     private MessageHandler messageHandler;
     public Client(String path) {
-        this.downloadPath = path;
-        this.UploadPath = path;
+        this.downloadPath = path + File.separator;
+        this.UploadPath = path + File.separator;
         this.isConnected = false;
         this.isRegistered = false;
     }
@@ -147,13 +147,10 @@ public class Client {
     public void store(String fileName) throws IOException {
         File file = new File(this.UploadPath + fileName);
         if (!file.exists()) {
-            System.out.println("File " + fileName + " not found");
-            dos.writeUTF("store " + fileName); // Inform server also the same message
+            System.out.println("Filepath: " + this.UploadPath + fileName + " not found");
             dos.writeInt(-1);
             return;
         }
-        dos.writeUTF("store " + fileName); // Inform server about the filename
-        dos.writeInt((int) file.length()); // Let server know about the file size
 
         try (FileInputStream fis = new FileInputStream(file)) {
             byte[] buffer = new byte[4 * 1024];
