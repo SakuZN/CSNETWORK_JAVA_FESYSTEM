@@ -20,9 +20,9 @@ public class Client {
     private DataInputStream dis;
     private DataOutputStream dos;
     private MessageHandler messageHandler;
-    public Client(String path) {
-        this.downloadPath = path + File.separator;
-        this.UploadPath = path + File.separator;
+    public Client(File path) {
+        this.downloadPath = path.getPath() + File.separator;
+        this.UploadPath = path.getPath() + File.separator;
         this.isConnected = false;
         this.isRegistered = false;
     }
@@ -151,17 +151,26 @@ public class Client {
             dos.writeInt(-1);
             return;
         }
+        dos.writeInt((int) file.length());
+
+        String serverResponse = dis.readUTF();
+        if (serverResponse.contains("Error")) {
+            System.out.println(serverResponse);
+            return;
+        }
+        System.out.println(serverResponse);
 
         try (FileInputStream fis = new FileInputStream(file)) {
             byte[] buffer = new byte[4 * 1024];
             int bytesRead;
             while ((bytesRead = fis.read(buffer)) != -1) {
+                System.out.println(bytesRead);
                 dos.write(buffer, 0, bytesRead);
             }
         }
 
-        String serverResponse = dis.readUTF();
-        System.out.println(serverResponse);
+        String finalResponse = dis.readUTF();
+        System.out.println(finalResponse);
     }
 
     private void parseCommand(String input) throws IOException {

@@ -286,33 +286,46 @@ public class ClientHandler implements Runnable {
         return false;
     }
 
-    private void handleStore(String fileName) {
+    private void handleStore(String fileName) throws IOException {
         File file = new File(server.fileDirectory + File.separator + fileName);
         boolean wasCreated = false;
 
         synchronized (fileLock) {
-            if (file.exists()) {
-                System.out.println("Error: File already exists");
+            System.out.println("Checking if file exists on server");
+            if (dataInputStream.readInt() == -1)
+            {
+                System.out.println("Error: Client File not found");
                 return;
             }
+            else
+                dataOutputStream.writeUTF("READY");  // Inform the client of ACK
 
             try (FileOutputStream fos = new FileOutputStream(file)) {
-                byte[] buffer = new byte[4*1024]; // A buffer of 4KB
+                byte[] buffer = new byte[4*1024];
                 int bytesReceived;
+
                 System.out.println("Starting to receive the file " + fileName);
-                while ((bytesReceived = dataInputStream.read(buffer)) != -1) {
+                while (true) {
+                    bytesReceived = dataInputStream.read(buffer);
+                    System.out.println("Bytes received: " + bytesReceived);
+                    if (bytesReceived == -1) {
+                        break;  // File transfer has completed
+                    }
                     wasCreated = true;
                     fos.write(buffer, 0, bytesReceived);
                 }
+
                 if (!wasCreated) {
                     throw new IOException("File was not created");
                 }
+
                 System.out.println("File has been received and saved successfully as " + fileName);
                 dataOutputStream.writeUTF("File " + fileName + " successfully uploaded.");
             } catch (IOException e) {
                 e.printStackTrace();
-                file.delete();  // Remove the incorrectly transferred file
+                file.delete();
                 System.out.println("Error occurred while transferring the file. Connection might be broken.");
+                dataOutputStream.writeUTF("Error occurred while transferring the file.");  // Inform the client
             }
         }
     }

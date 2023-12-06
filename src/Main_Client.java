@@ -6,8 +6,15 @@ import java.io.IOException;
 public class Main_Client {
 
     public static void main(String[] args){
-        String defaultPath = String.valueOf(new File(System.getProperty("user.dir")));
-        Client client = new Client(defaultPath);
+        File fileDir = new File("./user_files");
+        if (!fileDir.exists()) {
+            boolean dirCreated = fileDir.mkdirs();
+            if (!dirCreated) {
+                System.out.println("Error: Couldn't create directory for files");
+                return;
+            }
+        }
+        Client client = new Client(fileDir);
 
         try {
 

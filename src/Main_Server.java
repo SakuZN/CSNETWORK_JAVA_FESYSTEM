@@ -5,7 +5,7 @@ import java.io.IOException;
 
 public class Main_Server {
     public static void main(String[] args) {
-        File fileDir = new File("./files");
+        File fileDir = new File("./server_files");
         if (!fileDir.exists()) {
             boolean dirCreated = fileDir.mkdirs();
             if (!dirCreated) {
