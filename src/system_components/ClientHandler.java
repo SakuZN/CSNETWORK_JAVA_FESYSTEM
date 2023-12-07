@@ -287,43 +287,37 @@ public class ClientHandler implements Runnable {
     }
 
     private void handleStore(String fileName) throws IOException {
-        File file = new File(server.fileDirectory + File.separator + fileName);
-        boolean wasCreated = false;
+        File file = new File(server.fileDirectory + fileName);
 
-        synchronized (fileLock) {
+        synchronized (fileLock){
             System.out.println("Checking if file exists on server");
-            if (dataInputStream.readInt() == -1)
-            {
+            long fileSize = dataInputStream.readLong();
+            if (fileSize == -1){
                 System.out.println("Error: Client File not found");
                 return;
             }
-            else
-                dataOutputStream.writeUTF("READY");  // Inform the client of ACK
 
-            try (FileOutputStream fos = new FileOutputStream(file)) {
-                byte[] buffer = new byte[4*1024];
-                int bytesReceived;
+            dataOutputStream.writeUTF("READY");  // Inform the client of ACK
+
+            try (FileOutputStream fos = new FileOutputStream(file)){
+                byte[] buffer = new byte[4 * 1024];
+                int bytesReceived = 0;
 
                 System.out.println("Starting to receive the file " + fileName);
-                while (true) {
-                    bytesReceived = dataInputStream.read(buffer);
-                    System.out.println("Bytes received: " + bytesReceived);
-                    if (bytesReceived == -1) {
-                        break;  // File transfer has completed
-                    }
-                    wasCreated = true;
+                while (fileSize > 0
+                        && (bytesReceived = dataInputStream.read(
+                        buffer, 0,
+                        (int) Math.min(buffer.length, fileSize)))
+                        != -1) {
+                    // Here we write the file using write method
                     fos.write(buffer, 0, bytesReceived);
+                    fileSize -= bytesReceived; // read upto file size
                 }
-
-                if (!wasCreated) {
-                    throw new IOException("File was not created");
-                }
-
                 System.out.println("File has been received and saved successfully as " + fileName);
                 dataOutputStream.writeUTF("File " + fileName + " successfully uploaded.");
-            } catch (IOException e) {
+            }
+            catch (IOException e) {
                 e.printStackTrace();
-                file.delete();
                 System.out.println("Error occurred while transferring the file. Connection might be broken.");
                 dataOutputStream.writeUTF("Error occurred while transferring the file.");  // Inform the client
             }
@@ -336,13 +330,21 @@ public class ClientHandler implements Runnable {
             dataOutputStream.writeUTF(Error.ERROR_MESSAGES.get("FileNotFound"));
             return;
         }
-        dataOutputStream.writeUTF("File found");
+        dataOutputStream.writeLong(file.length());
+
+        if (file.length() == -1)
+        {
+            dataOutputStream.writeUTF(Error.ERROR_MESSAGES.get("FileError"));
+            return;
+        }
+
 
         try (FileInputStream fis = new FileInputStream(file)) {
             byte[] buffer = new byte[4*1024]; // A buffer of 4KB
             int bytesRead;
             while ((bytesRead = fis.read(buffer)) != -1) {
                 dataOutputStream.write(buffer, 0, bytesRead);
+                dataOutputStream.flush();
             }
             dataOutputStream.writeUTF("File " + fileName + " sent to client.");
         } catch (IOException e) {

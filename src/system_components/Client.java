@@ -122,22 +122,28 @@ public class Client {
     }
 
     public void get(String fileName) throws IOException {
+        File file = new File(this.downloadPath + fileName);
         String serverResponse = dis.readUTF();
         if (serverResponse.contains("Error")) {
             System.out.println("File " + fileName + " not found on the server");
             return;
         }
-        int fileLength = dis.readInt();
-        if (fileLength == -1) {
-            System.out.println("Error occurred while receiving the file");
+        long fileSize = dis.readLong();
+        if (fileSize == -1) {
+            dis.readUTF();
             return;
         }
-        try (FileOutputStream fos = new FileOutputStream(this.downloadPath + fileName)) {
+        try (FileOutputStream fos = new FileOutputStream(file)) {
             byte[] buffer = new byte[4 * 1024];
-            int bytesRead, totalBytesReceived = 0;
-            while (((bytesRead = dis.read(buffer)) != -1) && (totalBytesReceived < fileLength)) {
+            int bytesRead = 0;
+            while (fileSize > 0
+                    && (bytesRead= dis.read(
+                    buffer, 0,
+                    (int) Math.min(buffer.length, fileSize)))
+                    != -1) {
+                // Here we write the file using write method
                 fos.write(buffer, 0, bytesRead);
-                totalBytesReceived += bytesRead;
+                fileSize -= bytesRead; // read upto file size
             }
         }
         serverResponse = dis.readUTF();
@@ -151,7 +157,7 @@ public class Client {
             dos.writeInt(-1);
             return;
         }
-        dos.writeInt((int) file.length());
+        dos.writeLong(file.length());
 
         String serverResponse = dis.readUTF();
         if (serverResponse.contains("Error")) {
@@ -166,6 +172,7 @@ public class Client {
             while ((bytesRead = fis.read(buffer)) != -1) {
                 System.out.println(bytesRead);
                 dos.write(buffer, 0, bytesRead);
+                dos.flush();
             }
         }
 

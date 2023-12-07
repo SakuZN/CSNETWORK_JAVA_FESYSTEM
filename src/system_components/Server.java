@@ -20,7 +20,7 @@ public class Server {
 
     public Server(File fileDirectory) throws IOException {
         int port = 12345;
-        this.fileDirectory = fileDirectory.getPath();
+        this.fileDirectory = fileDirectory.getPath() + File.separator;
         fileList = new ArrayList<>();
 
         serverSocket = new ServerSocket(port);
