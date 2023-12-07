@@ -5,6 +5,8 @@ import java.net.Socket;
 import java.util.Map;
 import java.util.Objects;
 
+import static system_components.Server.getCurrentTime;
+
 public class ClientHandler implements Runnable {
     private final Socket clientSocket;
     private String alias;
@@ -313,7 +315,7 @@ public class ClientHandler implements Runnable {
                     fos.write(buffer, 0, bytesReceived);
                     fileSize -= bytesReceived; // read upto file size
                 }
-                System.out.println("File has been received and saved successfully as " + fileName);
+                System.out.printf("%s %s: Uploaded %s", this.alias, getCurrentTime(), fileName);
                 dataOutputStream.writeUTF("File " + fileName + " successfully uploaded.");
             }
             catch (IOException e) {
@@ -330,6 +332,9 @@ public class ClientHandler implements Runnable {
             dataOutputStream.writeUTF(Error.ERROR_MESSAGES.get("FileNotFound"));
             return;
         }
+        else
+            dataOutputStream.writeUTF("READY");
+
         dataOutputStream.writeLong(file.length());
 
         if (file.length() == -1)
@@ -344,9 +349,10 @@ public class ClientHandler implements Runnable {
             int bytesRead;
             while ((bytesRead = fis.read(buffer)) != -1) {
                 dataOutputStream.write(buffer, 0, bytesRead);
-                dataOutputStream.flush();
+                // Mini progress bar
             }
-            dataOutputStream.writeUTF("File " + fileName + " sent to client.");
+            System.out.println("File " + fileName + " sent to client.");
+            dataOutputStream.writeUTF("Server File: " + fileName + " successfully downloaded.");
         } catch (IOException e) {
             e.printStackTrace();
             dataOutputStream.writeUTF(Error.ERROR_MESSAGES.get("FileError"));
