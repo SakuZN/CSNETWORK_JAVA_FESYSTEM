@@ -4,6 +4,8 @@ import java.net.Socket;
 import java.util.Arrays;
 import java.util.Scanner;
 import java.io.*;
+import java.util.stream.Stream;
+
 public class Client {
 
     private Socket socket;
@@ -20,6 +22,7 @@ public class Client {
     private DataInputStream dis;
     private DataOutputStream dos;
     private MessageHandler messageHandler;
+
     public Client(File path) {
         this.downloadPath = path.getPath() + File.separator;
         this.UploadPath = path.getPath() + File.separator;
@@ -28,22 +31,24 @@ public class Client {
     }
 
     public void getCommand() {
-        System.out.print("Enter command: ");
+        System.out.print("\nEnter command: ");
         String command = scanner.nextLine();
         try {
             parseCommand(command);
         } catch (IOException e) {
+            System.out.println(System.lineSeparator().repeat(25));
             System.out.println("Error occurred while parsing the command: " + e.getMessage());
         }
     }
 
     public void clientServerInteractions() throws IOException {
         try {
-            System.out.print("Enter command: ");
+            System.out.print("\nEnter command: ");
             String command = scanner.nextLine();
             dos.writeUTF(command);
             parseServerCommand(command);
         } catch (IOException e) {
+            System.out.println(System.lineSeparator().repeat(25));
             System.out.println("Error occurred while parsing the command: " + e.getMessage());
             disconnect();
         }
@@ -58,7 +63,7 @@ public class Client {
             this.isConnected = true;
             this.messageHandler = new MessageHandler(this.msgSocket);
             this.messageHandler.start();
-            System.out.println(System.lineSeparator().repeat(50));
+            System.out.println(System.lineSeparator().repeat(25));
             System.out.println(dis.readUTF());
         } catch (IOException e) {
             System.out.println(Error.ERROR_MESSAGES.get("ConnectionFailed"));
@@ -95,7 +100,7 @@ public class Client {
     }
 
     private void disconnectFromServer() throws IOException {
-        System.out.println(System.lineSeparator().repeat(50));
+        System.out.println(System.lineSeparator().repeat(25));
         System.out.println(dis.readUTF());
         disconnect();
     }
@@ -103,6 +108,7 @@ public class Client {
     private void handle_help() {
         String helpText = """
                 /join <server_ip_add> <port> - Connect to the server application. Example: /join
+                
                 /exit - Exit the application. Example: /exit
                 """;
         System.out.println(helpText);
@@ -129,32 +135,35 @@ public class Client {
             return;
         }
         long fileSize = dis.readLong();
+        long initialFileSize = fileSize;
         if (fileSize == -1) {
             dis.readUTF();
             return;
         }
         try (FileOutputStream fos = new FileOutputStream(file)) {
             byte[] buffer = new byte[4 * 1024];
-            int bytesRead = 0;
+            int bytesRead, bytesSoFar = 0;
             while (fileSize > 0
                     && (bytesRead= dis.read(
                     buffer, 0,
                     (int) Math.min(buffer.length, fileSize)))
                     != -1) {
-                // Here we write the file using write method
+
                 fos.write(buffer, 0, bytesRead);
-                fileSize -= bytesRead; // read upto file size
+                bytesSoFar += bytesRead;
+                progressBar("Downloading:", initialFileSize, bytesSoFar);
+                fileSize -= bytesRead;
             }
         }
         serverResponse = dis.readUTF();
-        System.out.println(serverResponse);
+        System.out.println("\n" + serverResponse);
     }
 
     public void store(String fileName) throws IOException {
         File file = new File(this.UploadPath + fileName);
         if (!file.exists()) {
             System.out.println("Filepath: " + this.UploadPath + fileName + " not found");
-            dos.writeInt(-1);
+            dos.writeLong(-1);
             return;
         }
         dos.writeLong(file.length());
@@ -168,16 +177,36 @@ public class Client {
 
         try (FileInputStream fis = new FileInputStream(file)) {
             byte[] buffer = new byte[4 * 1024];
-            int bytesRead;
+            int bytesRead, bytesSoFar = 0;
             while ((bytesRead = fis.read(buffer)) != -1) {
-                System.out.println(bytesRead);
                 dos.write(buffer, 0, bytesRead);
+                bytesSoFar += bytesRead;
+                progressBar("Uploading file:", file.length(), bytesSoFar);
                 dos.flush();
             }
         }
 
         String finalResponse = dis.readUTF();
-        System.out.println(finalResponse);
+        System.out.println("\n" + finalResponse);
+    }
+
+    // Code from https://medium.com/javarevisited/how-to-display-progressbar-on-the-standard-console-using-java-18f01d52b30e
+    private void progressBar(String message, long totalBytes, long bytesTransferred) {
+        int progressBarLength = 25;
+        char complete = '-';
+        char incomplete = '#';
+        double progressPercentage = (double) bytesTransferred / totalBytes;
+        int progressLength = (int) (progressBarLength * progressPercentage);
+
+        StringBuilder builder = new StringBuilder();
+        Stream.generate(() -> incomplete).limit(progressBarLength).forEach(builder::append);
+
+        for (int i = 0; i < progressLength; i++) {
+            builder.replace(i, i + 1, String.valueOf(complete));
+        }
+
+        String progressBar = "\r" + message + " " + builder.toString() + " " + String.format("%.1f", progressPercentage * 100) + "%";
+        System.out.print(progressBar);
     }
 
     private void parseCommand(String input) throws IOException {
@@ -210,11 +239,11 @@ public class Client {
                     if (response.contains("success")) {
                         this.isRegistered = true;
                     }
-                    System.out.println(response);
+                    System.out.println("\n" + response);
                 }
                 case "/get" -> {
-                    if (!this.isRegistered) {
-                        System.out.println(dis.readUTF());
+                    if (!this.isRegistered || command.length == 1) {
+                        System.out.println("\n" + dis.readUTF());
                         break;
                     }
                     //Combine all the strings after the first index
@@ -222,8 +251,8 @@ public class Client {
                     get(fileName);
                 }
                 case "/store" -> {
-                    if (!this.isRegistered) {
-                        System.out.println(dis.readUTF());
+                    if (!this.isRegistered || command.length == 1) {
+                        System.out.println("\n" + dis.readUTF());
                         break;
                     }
                     //Combine all the strings after the first index
@@ -234,14 +263,14 @@ public class Client {
                     disconnectFromServer();
                 }
 
-                default -> System.out.println(dis.readUTF());
+                default -> System.out.println("\n" + dis.readUTF());
             }
         } catch (Exception e) {
-            System.out.println(dis.readUTF());
+            System.out.println("\n" + dis.readUTF());
         }
     }
 
-    class MessageHandler extends  Thread {
+    public class MessageHandler extends  Thread {
 
         private final Socket msgSocket;
         private final DataInputStream dis;

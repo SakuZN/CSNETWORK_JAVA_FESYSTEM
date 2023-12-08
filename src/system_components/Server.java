@@ -63,7 +63,7 @@ public class Server {
                 final Socket client = serverSocket.accept();
                 final Socket messageClient = msgServerSocket.accept();
 
-                String alias = "User" + clients.size();
+                String alias = "User " + UUID.randomUUID().toString().substring(0, 4);
                 clients.put(alias, client);
                 msgClients.put(alias, new MsgClient(messageClient));
 
@@ -71,12 +71,12 @@ public class Server {
 
                 clientHandlerExecutor.submit(new ClientHandler(this, client, alias));
             } catch(SocketException ex) {
-                System.out.println("Server sockets closed");
+                System.out.println("\nServer sockets closed");
                 stop();
 
             } catch(IOException ex) {
                 ex.printStackTrace();
-                System.out.println("Error occurred while accepting client connection" + ex.getMessage());
+                System.out.println("\nError occurred while accepting client connection" + ex.getMessage());
             }
         }
     }
@@ -108,7 +108,7 @@ public class Server {
         }
 
         public void sendMsg(String sender, String msg) throws IOException {
-            String message = String.format("Message from %s %s: %s", sender, getCurrentTime(), msg);
+            String message = String.format("\nMessage from %s %s: %s", sender, getCurrentTime(), msg);
             msgDataOutputStream.writeUTF(message);
         }
 

@@ -36,7 +36,7 @@ public class ClientHandler implements Runnable {
             while (true) {
                 try {
                     String data = dataInputStream.readUTF(); // this reads command from client
-                    String[] command = data.split(" ");
+                    String[] command = data.split("[ \n]");
                     System.out.println("User " + alias + " wants to execute " + data);
                     boolean isRunning = parseCommand(command);
                     if (!isRunning) {
@@ -73,6 +73,8 @@ public class ClientHandler implements Runnable {
             System.out.println("Error occurred while closing resources for client " + alias);
             e.printStackTrace();
         }
+        System.out.println("Cleanup completed for client " + alias);
+        this.alias = null;
     }
 
 
@@ -81,7 +83,7 @@ public class ClientHandler implements Runnable {
             switch (command[0]) {
                 case "/leave":
                     handleLeave();
-                    System.out.println("Command executed successfully.");
+                    System.out.println("User " + alias + " has left the server.");
                     return false;
 
                 case "/?":
@@ -91,10 +93,10 @@ public class ClientHandler implements Runnable {
                 case "/register":
                     if (command.length != 2) {
                         dataOutputStream.writeUTF(Error.ERROR_MESSAGES.get("InvalidParameters"));
+                        System.out.println("Command Failed!");
                         break;
                     }
                     handleRegister(command[1]);
-                    System.out.println("Command executed successfully.");
                     break;
 
                 case "/dir":
@@ -117,38 +119,45 @@ public class ClientHandler implements Runnable {
                         break;
                     }
                     handleMessage(command);
-                    System.out.println("Command executed successfully.");
                     break;
                 case "/broadcast":
                     if (handleUnregistered()) {
                         break;
                     }
                     handle_broadcast(command);
-                    System.out.println("Command executed successfully.");
                     break;
                 case "/get":
                     if (handleUnregistered()) {
                         break;
                     }
-                    //string build command 1 to rest and combine as file name
+                    if (command.length < 2) {
+                        System.out.println("Command Failed!");
+                        dataOutputStream.writeUTF(Error.ERROR_MESSAGES.get("InvalidParameters"));
+                        break;
+                    }
+
                     StringBuilder fileName = new StringBuilder();
                     for (int i = 1; i < command.length; i++) {
                         fileName.append(command[i]).append(" ");
                     }
+
                     handleGet(fileName.toString());
-                    System.out.println("Command executed successfully.");
                     break;
                 case "/store":
                     if (handleUnregistered()) {
                         break;
                     }
-                    //string build command 1 to rest and combine as file name
+                    if (command.length < 2) {
+                        System.out.println("Command Failed!");
+                        dataOutputStream.writeUTF(Error.ERROR_MESSAGES.get("InvalidParameters"));
+                        break;
+                    }
                     StringBuilder storeFile = new StringBuilder();
                     for (int i = 1; i < command.length; i++) {
                         storeFile.append(command[i]).append(" ");
                     }
+
                     handleStore(storeFile.toString());
-                    System.out.println("Command executed successfully.");
                     break;
                 default:
                     dataOutputStream.writeUTF(Error.ERROR_MESSAGES.get("UnknownCommand"));
@@ -167,6 +176,9 @@ public class ClientHandler implements Runnable {
                 userList.append(entry.getKey()).append("\n");
             }
         }
+        if (userList.toString().isEmpty()) {
+            userList.append("No other users connected.");
+        }
         String header = "User List:\n";
         dataOutputStream.writeUTF(header + userList);
     }
@@ -181,7 +193,7 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    private void handleRegister(String newAlias) {
+    private void handleRegister(String newAlias) throws IOException {
         if(this.server.clients.containsKey(newAlias) || newAlias.isEmpty() || newAlias.contains("User")) {
             try {
                 dataOutputStream.writeUTF(Error.ERROR_MESSAGES.get("AliasExists"));
@@ -189,17 +201,19 @@ public class ClientHandler implements Runnable {
                 e.printStackTrace();
             }
         } else {
+            try {
             this.server.clients.put(newAlias, this.clientSocket);
             this.server.msgClients.put(newAlias, this.server.msgClients.get(this.alias));
             this.server.clients.remove(this.alias);
             this.server.msgClients.remove(this.alias);
             this.alias = newAlias;
             this.isRegistered = true;
-            try {
+
                 System.out.println("User " + this.alias + " registered successfully.");
                 dataOutputStream.writeUTF("Registration successful. Welcome " + this.alias);
             } catch (IOException e) {
                 e.printStackTrace();
+                dataOutputStream.writeUTF(Error.ERROR_MESSAGES.get("AliasExists"));
             }
         }
     }
@@ -212,6 +226,9 @@ public class ClientHandler implements Runnable {
                 fileList.append(file).append("\n");
             }
             String header = "File List:\n";
+            if (fileList.toString().isEmpty()) {
+                fileList.append("No files yet.");
+            }
             dataOutputStream.writeUTF(header + fileList);
         }
     }
@@ -223,7 +240,6 @@ public class ClientHandler implements Runnable {
 
         try {
             targetAlias = command[1];
-            //Message can be multiple words so we need to concatenate them
             for (int i = 2; i < command.length; i++) {
                 message.append(command[i]).append(" ");
             }
@@ -239,6 +255,7 @@ public class ClientHandler implements Runnable {
             else if (this.server.clients.containsKey(targetAlias)) {
                 this.server.msgClients.get(targetAlias).sendMsg(this.alias, message.toString());
                 dataOutputStream.writeUTF("Message sent to " + targetAlias);
+                System.out.println(this.alias + " sent a message to " + targetAlias);
             }
             else {
                 dataOutputStream.writeUTF("Target user not found.");
@@ -264,12 +281,14 @@ public class ClientHandler implements Runnable {
         try {
             this.server.msgClients.forEach((alias, msgClient) -> {
                 try {
-                    msgClient.sendMsg(this.alias, message.toString());
+                    if (!alias.equals(this.alias))
+                        msgClient.sendMsg(this.alias, message.toString());
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
             });
             dataOutputStream.writeUTF("Message sent to all users.");
+            System.out.println("User " + this.alias + " sent a message to all users.");
         }
         catch (Exception e) {
             dataOutputStream.writeUTF(Error.ERROR_MESSAGES.get("MessageFailed"));
@@ -279,6 +298,7 @@ public class ClientHandler implements Runnable {
     private Boolean handleUnregistered() {
         if (!this.isRegistered) {
             try {
+                System.out.println("Command Failed!");
                 dataOutputStream.writeUTF(Error.ERROR_MESSAGES.get("Unregistered"));
                 return true;
             } catch (IOException e) {
@@ -292,7 +312,6 @@ public class ClientHandler implements Runnable {
         File file = new File(server.fileDirectory + fileName);
 
         synchronized (fileLock){
-            System.out.println("Checking if file exists on server");
             long fileSize = dataInputStream.readLong();
             if (fileSize == -1){
                 System.out.println("Error: Client File not found");
@@ -315,7 +334,7 @@ public class ClientHandler implements Runnable {
                     fos.write(buffer, 0, bytesReceived);
                     fileSize -= bytesReceived; // read upto file size
                 }
-                System.out.printf("%s %s: Uploaded %s", this.alias, getCurrentTime(), fileName);
+                System.out.printf("\n%s %s: Uploaded %s\n", this.alias, getCurrentTime(), fileName);
                 dataOutputStream.writeUTF("File " + fileName + " successfully uploaded.");
             }
             catch (IOException e) {
@@ -328,7 +347,9 @@ public class ClientHandler implements Runnable {
 
     private void handleGet(String fileName) throws IOException {
         File file = new File(server.fileDirectory + File.separator + fileName);
+        System.out.println("Checking if file exists on server");
         if(!file.exists()){
+            System.out.println("File not found on server");
             dataOutputStream.writeUTF(Error.ERROR_MESSAGES.get("FileNotFound"));
             return;
         }
@@ -349,9 +370,8 @@ public class ClientHandler implements Runnable {
             int bytesRead;
             while ((bytesRead = fis.read(buffer)) != -1) {
                 dataOutputStream.write(buffer, 0, bytesRead);
-                // Mini progress bar
             }
-            System.out.println("File " + fileName + " sent to client.");
+            System.out.println("File " + fileName + " sent to user " + this.alias + ".");
             dataOutputStream.writeUTF("Server File: " + fileName + " successfully downloaded.");
         } catch (IOException e) {
             e.printStackTrace();
@@ -365,7 +385,8 @@ public class ClientHandler implements Runnable {
                 "/dir - Request directory file list from a server. Example: /dir\n" +
                 "/store <filename> - Send file to server. Example: /store Hello.txt\n" +
                 "/get <filename> - Fetch a file from a server. Example: /get Hello.txt\n" +
-                "/leave - Disconnect from the server application. Example: /leave\n" +
+                "/leave - Disconnect from the server application. Example: /leave\n\n" +
+                "Messaging Commands:\n" +
                 "/userlist - List all users connected to the server. Example: /userlist\n" +
                 "/message <user> <message> - Send a message to a specific user. Example: /message User1 Hello!\n" +
                 "/broadcast <message> - Send a message to all users. Example: /broadcast Hello!\n";
